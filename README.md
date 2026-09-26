@@ -1,6 +1,6 @@
 # Refusals That Bend
 
-Code for *Refusals That Bend: Measuring and Predicting Task Malleability in Embodied VLM Planners* (under review).
+Code for *Refusals That Bend: Measuring and Predicting Task Malleability in Embodied VLM Planners*.
 
 An embodied vision-language planner that refuses a task on one image may comply once a single everyday object is added to the scene. We call the fraction of inserted objects that overturn a refusal the task's **malleability**. This repository contains the pipeline that measures it and the predictor that estimates it without querying the planner.
 
@@ -69,3 +69,6 @@ bash scripts/run_rq4.sh a1 score       # turn the raw output into one score per 
 bash scripts/run_rq4.sh a5 score       # logistic composite of a1 to a4
 bash scripts/run_rq4.sh evaluate       # rank correlation and ROC against the labels
 ```
+
+## LatentHarm Dataset
+https://anonymous-hf.com/a/s3y6oyzsu7t4/
