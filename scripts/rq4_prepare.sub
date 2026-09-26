@@ -1,0 +1,57 @@
+#!/bin/bash
+# FILENAME: rq4_prepare.sub
+# RQ4 A2 'prepare' stage: write the perturbed images + manifest. CPU ONLY -- no --gres.
+#
+# This is the one RQ4 stage that builds model INPUTS rather than querying a model, so it
+# needs no GPU. It runs on the cluster (not locally) so the ~31 GB of images lands on the
+# same filesystem the A2 infer shards read.
+#
+# NOT RESUMABLE: a re-run regenerates every task from scratch (with different noise --
+# fine, any valid draw measures the same thing), so a preempted job loses the whole pass.
+# If this job is preempted, delete the noise dir + manifest and start over -- which is why
+# it does not run under the standby qos by default.
+#
+# Generation is parallel over tasks (approach2 --workers, default = all cores), so the
+# --cpus-per-task below is what actually sets the throughput.
+#
+# Not normally submitted by hand -- scripts/run_rq4.sh a2 prepare fans it out. Direct use:
+#   sbatch scripts/rq4_prepare.sub \
+#          EARDataset/robot_constitution_64_automerge_er2_attack_20.csv \
+#          EARDataset/dataset_baseline_er2.csv \
+#          EARDataset/proxy_noise_er2_manifest.csv \
+#          EARDataset/proxy_noise_er2
+#
+# This job does NOT use the GPU -- it only writes PNGs. It requests one anyway because
+# this cluster has NO CPU-only queue, and a100-80gb rejects a job that asks for no
+# --gres ("No GPUs requested"). So the GPU sits idle for the duration; that is the cost
+# of admission here, not an oversight. Keep the walltime tight for that reason.
+#SBATCH -A antoniob
+#SBATCH -p a100-80gb
+#SBATCH --gres=gpu:1
+#SBATCH --mem=64G
+#SBATCH --cpus-per-task=17
+#SBATCH --qos=normal
+#SBATCH --time=4:00:00
+#SBATCH -J rq4_a2_prepare
+#SBATCH -o rq4_a2_prepare_%j.out
+
+host=`hostname -s`
+echo "prepare on $host"
+
+module load external
+module load conda
+conda activate er-model-vllm
+
+attack_csv="$1"
+baseline_csv="$2"
+manifest="$3"
+noise_dir="$4"
+
+echo "RQ4 A2 prepare: manifest=$manifest noise_dir=$noise_dir"
+
+python analysis/rq4/approach2.py \
+       --stage prepare \
+       --attack_csv "$attack_csv" \
+       --baseline_csv "$baseline_csv" \
+       --manifest "$manifest" \
+       --noise_dir "$noise_dir"

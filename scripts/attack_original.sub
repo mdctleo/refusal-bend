@@ -1,0 +1,34 @@
+#!/bin/bash
+# FILENAME: attack.sub
+#SBATCH -A antoniob
+#SBATCH -p a100-80gb
+#SBATCH --mem=256G
+#SBATCH --gres=gpu:1
+#SBATCH --qos=standby
+#SBATCH --time=4:00:00
+#SBATCH -J attack_original_%j
+#SBATCH -o attack_original_%j.out
+
+host=`hostname -s`
+echo $CUDA_VISIBLE_DEVICES
+
+module load external
+module load conda
+conda activate er-model-vllm
+
+
+input_csv_path="$1"
+image_root="$2"
+output_path="$3"
+num_samples="$4"
+rang="$5"
+
+echo "Range for attack_original experiment: $rang"
+
+python src/attack_original.py \
+       --input_csv_path "$input_csv_path" \
+       --image_root "$image_root" \
+       --rang $rang \
+       --output_path "$output_path" \
+       --num_samples $num_samples
+

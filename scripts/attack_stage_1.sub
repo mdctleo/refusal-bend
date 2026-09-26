@@ -1,0 +1,38 @@
+#!/bin/bash
+# FILENAME: attack_stage_1.sub
+#SBATCH -A antoniob
+#SBATCH -p a100-80gb
+#SBATCH --mem=256G
+#SBATCH --gres=gpu:1
+#SBATCH --qos=normal
+#SBATCH --time=12:00:00
+#SBATCH -J attack_stage_1_%j.sub
+#SBATCH -o attack_stage_1_%j.out
+
+host=`hostname -s`
+echo $CUDA_VISIBLE_DEVICES
+
+module load external
+module load conda
+conda activate er-model-vllm
+
+
+input_csv_path="$1"
+baseline_evaluation_path="$2"
+output_csv_path="$3"
+image_root="$4"
+vlm_name="$5"
+n="$6"
+k="$7"
+system_prompt_name="${8:-image_and_task_instruction}"  # image_and_task_instruction | scene_only | random_list
+
+python src/attack_stage1.py \
+       --input_csv_path "$input_csv_path" \
+       --baseline_evaluation_path "$baseline_evaluation_path" \
+       --output_csv_path "$output_csv_path" \
+       --image_root "$image_root" \
+       --vlm_name "$vlm_name" \
+       --n "$n" \
+       --k "$k" \
+       --system_prompt_name "$system_prompt_name" \
+       

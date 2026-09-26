@@ -1,0 +1,49 @@
+#!/bin/bash
+# FILENAME: rq4_proxy.sub
+# One GPU job = one RQ4 proxy-inference shard. Generic: the approach module, the slice
+# and every path come in as positional args, so a single .sub serves A1-A4 (this is the
+# same shape as scripts/attack_original.sub).
+#
+# Not normally submitted by hand -- scripts/run_rq4.sh fans these out. Direct use:
+#   sbatch scripts/rq4_proxy.sub analysis/rq4/approach3.py 0,423 \
+#          Qwen/Qwen3-VL-30B-A3B-Thinking-FP8 analysis/output/rq4_er2 \
+#          EARDataset/robot_constitution_64_automerge_er2_attack_20.csv \
+#          EARDataset/dataset_baseline_er2.csv
+#
+# Anything after the 6th arg is passed through to the module (A2 needs --manifest and
+# --noise_dir). The range is POSITIONAL, so there is no --export comma-splitting problem.
+#
+#SBATCH -A antoniob
+#SBATCH -p a100-80gb
+#SBATCH --mem=256G
+#SBATCH --gres=gpu:1
+#SBATCH --qos=standby
+#SBATCH --time=4:00:00
+#SBATCH -J rq4_proxy_%j
+#SBATCH -o rq4_proxy_%j.out
+
+host=`hostname -s`
+echo $CUDA_VISIBLE_DEVICES
+
+module load external
+module load conda
+conda activate er-model-vllm
+
+module_py="$1"       # analysis/rq4/approachN.py
+rang="$2"            # "start,end" -- task-id indices for A1/A3/A4, manifest rows for A2
+vlm_name="$3"
+out_prefix="$4"
+attack_csv="$5"
+baseline_csv="$6"
+shift 6
+
+echo "RQ4 infer: $module_py  slice [$rang)  model=$vlm_name  prefix=$out_prefix"
+
+python "$module_py" \
+       --stage infer \
+       --rang "$rang" \
+       --vlm_name "$vlm_name" \
+       --out_prefix "$out_prefix" \
+       --attack_csv "$attack_csv" \
+       --baseline_csv "$baseline_csv" \
+       "$@"

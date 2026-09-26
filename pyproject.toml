@@ -1,0 +1,29 @@
+[project]
+name = "asimov"
+version = "0.1.0"
+description = "Asimov project"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas",
+    "numpy>=2.5.0",
+    "scipy",
+    "litellm",
+    "transformers",
+    "torch",
+    "tqdm",
+    "pillow",
+    "sentence-transformers",
+    "matplotlib>=3.11.1",
+    "seaborn>=0.13.2",
+    "google-genai>=2.17.0",
+    "statsmodels>=0.14.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+# Flat collection of scripts under src/ — install deps into the venv,
+# don't try to build/install the project itself as a package.
+package = false

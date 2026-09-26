@@ -1,0 +1,31 @@
+__pycache__
+asimov_v1_samples
+asimov_v1_tf_datasets
+coco-vqa2
+*.zip
+*.7z
+auto/
+*.out
+*.png
+*.csv
+*.json
+EARDataset/
+MyDataset/
+*.lock
+!uv.lock
+.codex
+.DS_Store
+paper/
+*.env
+# .devcontainer/.env holds the Gemini API key — keep it ignored so the secret
+# never gets committed (it is injected at container start via runArgs --env-file).
+
+# Not part of the public release
+.devcontainer/
+presentation/
+analysis/output/
+*.log
+
+# Only the root README ships; working notes under analysis/ stay local
+*.md
+!/README.md
