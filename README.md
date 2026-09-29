@@ -84,4 +84,4 @@ If you use this code or the findings in your work, please cite the paper:
 ```
 
 ## LatentHarm Dataset
-https://anonymous-hf.com/a/s3y6oyzsu7t4/
+https://huggingface.co/datasets/mdctleo/LatentHarm
