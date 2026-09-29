@@ -1,6 +1,6 @@
 # 🤖 Refusals That Bend
 
-Code for *Refusals That Bend: Measuring and Predicting Task Malleability in Embodied VLM Planners* (under review).
+Code for *Refusals That Bend: Measuring and Predicting Task Malleability in Embodied VLM Planners*.
 
 An embodied vision-language planner that refuses a task on one image may comply once a single everyday object is added to the scene. We call the fraction of inserted objects that overturn a refusal the task's **malleability**. This repository contains the pipeline that measures it and the predictor that estimates it without querying the planner.
 
@@ -83,9 +83,5 @@ If you use this code or the findings in your work, please cite the paper:
 }
 ```
 
-**Authors**
-
-- Leo Y. Lin, Purdue University (lin1736@purdue.edu)
-- Mikhail Kuznetsov, Amazon (mikuzne@amazon.com). This work was conducted independently of Amazon.
-- Muslum Ozgur Ozmen, Arizona State University (ozmen@asu.edu)
-- Z. Berkay Celik, Purdue University (zcelik@purdue.edu)
+## LatentHarm Dataset
+https://anonymous-hf.com/a/s3y6oyzsu7t4/
