@@ -1,4 +1,4 @@
-# Refusals That Bend
+# 🤖 Refusals That Bend
 
 Code for *Refusals That Bend: Measuring and Predicting Task Malleability in Embodied VLM Planners* (under review).
 
@@ -69,3 +69,23 @@ bash scripts/run_rq4.sh a1 score       # turn the raw output into one score per 
 bash scripts/run_rq4.sh a5 score       # logistic composite of a1 to a4
 bash scripts/run_rq4.sh evaluate       # rank correlation and ROC against the labels
 ```
+
+## 📖 How to Cite
+
+If you use this code or the findings in your work, please cite the paper:
+
+```bibtex
+@article{lin2026refusals,
+  title   = {Refusals That Bend: Measuring and Predicting Task Malleability in Embodied {VLM} Planners},
+  author  = {Lin, Leo Y. and Kuznetsov, Mikhail and Ozmen, Muslum Ozgur and Celik, Z. Berkay},
+  year    = {2026},
+  note    = {Under review}
+}
+```
+
+**Authors**
+
+- Leo Y. Lin, Purdue University (lin1736@purdue.edu)
+- Mikhail Kuznetsov, Amazon (mikuzne@amazon.com). This work was conducted independently of Amazon.
+- Muslum Ozgur Ozmen, Arizona State University (ozmen@asu.edu)
+- Z. Berkay Celik, Purdue University (zcelik@purdue.edu)
