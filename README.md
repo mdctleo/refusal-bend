@@ -79,7 +79,7 @@ If you use this code or the findings in your work, please cite the paper:
   title   = {Refusals That Bend: Measuring and Predicting Task Malleability in Embodied {VLM} Planners},
   author  = {Lin, Leo Y. and Kuznetsov, Mikhail and Ozmen, Muslum Ozgur and Celik, Z. Berkay},
   year    = {2026},
-  note    = {Under review}
+  note    = {preprint}
 }
 ```
 
