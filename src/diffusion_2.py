@@ -10,7 +10,7 @@ import torch
 from tqdm import tqdm
 from vllm_omni.entrypoints import AsyncOmniDiffusion
 from vllm_omni.inputs.data import OmniDiffusionSamplingParams
-import random
+import hashlib
 
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -38,12 +38,14 @@ class Diffusion:
         guidance_scale=0.0,
         batch_size=16,
         num_images_per_prompt=1,
+        seed=42,
     ):
         self.model_name = model_name
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
         self.batch_size = batch_size
         self.num_images_per_prompt = num_images_per_prompt
+        self.seed = seed
 
         self.backend_name = "vllm-omni"
         self._closed = False
@@ -133,9 +135,15 @@ class Diffusion:
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             image.save(save_path)
 
-    def _build_sampling_params(self, *, height=None, width=None, max_sequence_length=None):
+    def _derive_seed(self, key):
+        """Per-output seed: a stable hash of the base seed and the output's key, so the same
+        key always renders the same image and distinct keys render distinct ones."""
+        digest = hashlib.sha256(f"{self.seed}:{key}".encode("utf-8")).digest()
+        return int.from_bytes(digest[:4], "big") % (2**31)
+
+    def _build_sampling_params(self, *, seed_key, height=None, width=None, max_sequence_length=None):
         return OmniDiffusionSamplingParams(
-            seed=random.randint(0, 2**31 - 1),
+            seed=self._derive_seed(seed_key),
             num_inference_steps=self.num_inference_steps,
             guidance_scale=self.guidance_scale,
             num_outputs_per_prompt=self.num_images_per_prompt,
@@ -172,18 +180,21 @@ class Diffusion:
             payload["negative_prompt"] = negative_prompt
         return payload
 
-    def create_images(self, prompts, save_paths):
+    def create_images(self, prompts, save_paths, seed_keys=None):
         if len(prompts) != len(save_paths):
             raise ValueError("The number of prompts must match the number of save paths.")
 
-        sampling_params = self._build_sampling_params(height=1024, width=1024, max_sequence_length=256)
+        seed_keys = self._resolve_seed_keys(seed_keys, len(prompts))
 
         # vLLM-Omni's installed Flux2 pipelines currently process one prompt per request.
-        for prompt_item, save_path in tqdm(
-            zip(prompts, save_paths),
+        for prompt_item, save_path, seed_key in tqdm(
+            zip(prompts, save_paths, seed_keys),
             desc="Generating images...",
             total=len(prompts),
         ):
+            sampling_params = self._build_sampling_params(
+                seed_key=seed_key, height=1024, width=1024, max_sequence_length=256
+            )
             prompt_payload = self._build_text_prompt_payload(prompt_item)
             output = self._run_async(self.engine.generate(prompt_payload, sampling_params))
             
@@ -191,12 +202,21 @@ class Diffusion:
             save_targets = self._generate_numbered_paths(save_path, len(output.images))
             self._save_images(output.images, save_targets)
 
-    def edit_images(self, prompts, image_paths, save_paths):
+    def _resolve_seed_keys(self, seed_keys, count):
+        if seed_keys is None:
+            return [str(i) for i in range(count)]
+        if len(seed_keys) != count:
+            raise ValueError("The number of seed keys must match the number of prompts.")
+        return list(seed_keys)
+
+    def edit_images(self, prompts, image_paths, save_paths, seed_keys=None):
         """
         Args:
             prompts (list of str): A list of text prompts describing the desired edits.
             image_paths (list of str): A list of image paths.
             save_paths (list of str): A list of file paths to save the edited images.
+            seed_keys (list of str, optional): One key per output that fixes its seed together
+                with the base seed. Defaults to the output's position in the list.
 
         Returns:
             None. Images are written to `save_paths`.
@@ -207,12 +227,14 @@ class Diffusion:
         if len(image_paths) != len(save_paths):
             raise ValueError("The number of image paths must match the number of save paths.")
 
-        for prompt_item, image_path, save_path in tqdm(
-            zip(prompts, image_paths, save_paths),
+        seed_keys = self._resolve_seed_keys(seed_keys, len(prompts))
+
+        for prompt_item, image_path, save_path, seed_key in tqdm(
+            zip(prompts, image_paths, save_paths, seed_keys),
             desc="Editing images in batches...",
             total=len(prompts),
         ):
-            sampling_params = self._build_sampling_params()
+            sampling_params = self._build_sampling_params(seed_key=seed_key)
             prompt_payload = self._build_edit_prompt_payload(prompt_item, image_path)
             output = self._run_async(self.engine.generate(prompt_payload, sampling_params))
             edited_images = output.images

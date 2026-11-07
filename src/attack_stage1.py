@@ -48,10 +48,11 @@ class AttackStage1():
           image_and_task_instruction  RQ1: sees image + instruction, red-team prompt (default)
           scene_only                  RQ2: sees the image only, neutral prompt
           random_list                 RQ2: no VLM call; draws from RANDOM_OBJECT_LIST
-        The two RQ2 modes also write `Attack Image Path` as {Task ID}/{Object ID}/final_0.png,
+          null_edit                   RQ2: no VLM call; n empty sets per task, so the editor adds nothing
+        The RQ2 modes also write `Attack Image Path` as {Task ID}/{Object ID}/final_0.png,
         the name attack_original.py produces at --num_samples 1, so no expand step is needed.
         """
-        assert system_prompt_name in ("image_and_task_instruction", "scene_only", "random_list"), system_prompt_name
+        assert system_prompt_name in ("image_and_task_instruction", "scene_only", "random_list", "null_edit"), system_prompt_name
         output= []
 
         unique_task_ids = df['Task ID'].unique()
@@ -103,10 +104,14 @@ class AttackStage1():
 
         if system_prompt_name == "random_list":
             print(f"random_list mode: no proposer call; drawing {n*k} of {len(RANDOM_OBJECT_LIST)} list items per task", flush=True)
+        elif system_prompt_name == "null_edit":
+            print(f"null_edit mode: no proposer call; {n} empty object sets per task", flush=True)
         else:
             print("First user prompt: ", user_prompts[0], flush=True)
 
-        if system_prompt_name == "random_list":
+        if system_prompt_name == "null_edit":
+            responses = [{"sets": [[] for _ in range(n)]} for _ in unique_task_ids]
+        elif system_prompt_name == "random_list":
             # No proposer: draw n*k list items per task without replacement, one seed per task index.
             assert n * k <= len(RANDOM_OBJECT_LIST), f"n*k={n*k} exceeds the {len(RANDOM_OBJECT_LIST)}-item list"
             responses = []
@@ -162,7 +167,7 @@ class AttackStage1():
 
     def query_vlm(self, user_prompts, image_paths, system_prompt, temperature, top_p, top_k, seed, max_new_tokens=4096, response_schema=None):
         if self.vlm is None:
-            from vlm_2 import VLM  # lazy: needs vllm/torch; the random_list mode never gets here
+            from vlm_2 import VLM  # lazy: needs vllm/torch; the random_list and null_edit modes never get here
             self.vlm = VLM(
                 model_name=self.vlm_name,
                 system_prompt=system_prompt,
@@ -190,7 +195,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_csv_path", type=str, required=True, help="Path to output CSV file to save results")
     parser.add_argument("--image_root", type=str, required=True, help="Root directory for images referenced in the CSV")
     parser.add_argument("--vlm_name", type=str, default="Qwen/Qwen3-VL-30B-A3B-Thinking-FP8", help="Name of the VLM model to use")
-    parser.add_argument("--system_prompt_name", type=str, default="image_and_task_instruction", choices=["image_and_task_instruction", "scene_only", "random_list"], help="Proposer: RQ1 red-team prompt (default), image-only neutral prompt, or the fixed random list (no VLM)")
+    parser.add_argument("--system_prompt_name", type=str, default="image_and_task_instruction", choices=["image_and_task_instruction", "scene_only", "random_list", "null_edit"], help="Proposer: RQ1 red-team prompt (default), image-only neutral prompt, the fixed random list (no VLM), or empty object sets for the null-edit control (no VLM)")
     parser.add_argument("--n", type=int, default=50, help="Number of co-object sets to generate per task")
     parser.add_argument("--k", type=int, default=1, help="Number of co-objects per object set")
     args = parser.parse_args()

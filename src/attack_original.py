@@ -23,6 +23,7 @@ class AttackOriginal():
         image_paths = []
         save_paths = []
         user_prompts = []
+        seed_keys = []
 
         for index, task in enumerate(tqdm(df.to_dict('records'), total=len(df), desc="Preparing image edits")):
             original_image_path = os.path.join(image_root, f"{task['Matched Image Path']}")
@@ -39,6 +40,7 @@ class AttackOriginal():
                 os.makedirs(save_folder, exist_ok=True)
                 save_path = f"{save_folder}/final_{sample_idx}.png"
                 save_paths.append(save_path)
+                seed_keys.append(f"{task_id}/{object_id}/{sample_idx}")
 
         # One image per row -> one relative path per row, written before rendering: a re-render
         # overwrites both the images and their paths.
@@ -50,6 +52,7 @@ class AttackOriginal():
             prompts=user_prompts,
             image_paths=image_paths,
             save_paths=save_paths,
+            seed_keys=seed_keys,
         )
 
     def write_attack_image_paths(self, output_path, index, attack_image_paths):
@@ -64,7 +67,7 @@ class AttackOriginal():
             df.to_csv(output_path, index=False)
         print(f"Attack Image Path written for {len(attack_image_paths)} rows to {output_path}", flush=True)
 
-    def edit_images_diffusion(self, prompts, image_paths, save_paths, num_images_per_prompt=1):
+    def edit_images_diffusion(self, prompts, image_paths, save_paths, seed_keys=None, num_images_per_prompt=1):
         if self.diffusion is None:
             self.diffusion = Diffusion(model_name="flux2-klein", num_inference_steps=4, guidance_scale=1.0, num_images_per_prompt=num_images_per_prompt)
 
@@ -72,6 +75,7 @@ class AttackOriginal():
             prompts=prompts,
             image_paths=image_paths,
             save_paths=save_paths,
+            seed_keys=seed_keys,
         )
 
 if __name__ == "__main__":

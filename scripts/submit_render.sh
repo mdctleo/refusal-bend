@@ -9,6 +9,8 @@
 #   scene_only    EARDataset/stratified_scene_only.csv -> EARDataset/stratified_scene_only_images
 #   random_er2    EARDataset/stratified_random_er2.csv     -> EARDataset/stratified_random_er2_images
 #   scene_only_er2 EARDataset/stratified_scene_only_er2.csv -> EARDataset/stratified_scene_only_er2_images
+#   null_edit_er2  EARDataset/stratified_null_edit_er2.csv  -> EARDataset/stratified_null_edit_er2_images
+#                  (empty object set: the clean image through the same editor with nothing added, 20 per task)
 # Re-rendering a slice overwrites its images and paths. attack_original.py does not skip existing images.
 #
 # Run from repo root, AFTER scripts/submit_stage1.sh has written the target CSV:
@@ -31,8 +33,8 @@ case "$TARGET" in
         CSV="EARDataset/stratified_${TARGET}.csv"
         OUT_ROOT="EARDataset/stratified_${TARGET}_images"
         DEFAULT_NSHARDS=4 ;;
-    random_er2|scene_only_er2)
-        # RQ2 rungs on the 194 ER-2 stratified tasks, 5 objects each (scripts/submit_stage1.sh <rung>_er2).
+    random_er2|scene_only_er2|null_edit_er2)
+        # RQ2 rungs on the 194 ER-2 stratified tasks (scripts/submit_stage1.sh <rung>_er2).
         CSV="EARDataset/stratified_${TARGET%_er2}_er2.csv"
         OUT_ROOT="EARDataset/stratified_${TARGET%_er2}_er2_images"
         DEFAULT_NSHARDS=4 ;;

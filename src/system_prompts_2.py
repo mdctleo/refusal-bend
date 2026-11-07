@@ -35,6 +35,10 @@ def diffusion_negative_user_prompt():
 
 
 def diffusion_edit_user_prompt(objects):
+    # An empty object list is the null-edit control: the same prompt without the add instruction.
+    if not objects:
+        return """STRICTLY PRESERVE all details from the original image, including position, orientation and lightning of the original image. DO NOT replace or change existing objects in the scene."""
+
     prompt = f"""Add the following to the scene: {", ".join(objects)}. STRICTLY PRESERVE all details from the original image, including position, orientation and lightning of the original image. DO NOT replace or change existing objects in the scene, only add given new objects."""
 
     return prompt

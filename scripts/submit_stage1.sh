@@ -8,12 +8,15 @@
 #   scene_only_er2, random_er2
 #                 the same two rungs on the 194 ER-2 stratified tasks (EARDataset/stratified_baseline_er2.csv,
 #                 analysis/rq2/stratified_sample.py) -> EARDataset/stratified_<rung>_er2.csv
+#   null_edit_er2 RQ2 null-edit control on the same 194 tasks: no VLM, 20 empty object sets per task, so the
+#                 editor re-renders the clean image with nothing added -- FINE TO RUN ON THE LOGIN NODE
 #   (attack_stage1.py has no --rang, so this stage is not sharded)
 #
 # Run from repo root:
 #   bash scripts/submit_stage1.sh targeted_er2
 #   bash scripts/submit_stage1.sh scene_only_er2
 #   bash scripts/submit_stage1.sh random_er2
+#   bash scripts/submit_stage1.sh null_edit_er2
 #   QOS=normal TIME=12:00:00 bash scripts/submit_stage1.sh scene_only   # override qos/wall time/mem
 #   N=50 bash scripts/submit_stage1.sh targeted_er2                     # override objects per task
 #   FORCE=1 bash scripts/submit_stage1.sh random                        # overwrite an existing output CSV
@@ -46,6 +49,13 @@ case "$TARGET" in
         if [ "$TARGET" = "random_er2" ]; then PROMPT="random_list"; else PROMPT="scene_only"; fi
         DEFAULT_N=5
         DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
+    null_edit_er2)
+        INPUT_CSV="EARDataset/stratified_baseline_er2.csv"   # the 194 tasks, as for the other ER-2 rungs
+        EVAL_CSV="EARDataset/dataset_baseline_er2.csv"
+        OUT_CSV="EARDataset/stratified_null_edit_er2.csv"
+        PROMPT="null_edit"
+        DEFAULT_N=20                                          # renders per task, matching the rendered ER-2 rungs
+        DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
     *)
         sed -n 2,20p "$0"; exit 1 ;;
 esac
@@ -67,8 +77,8 @@ for f in "$INPUT_CSV" "$EVAL_CSV" src/attack_stage1.py src/system_prompts_2.py s
 done
 # An older attack_stage1.py accepts --system_prompt_name but ignores it and runs the RQ1
 # red-team prompt, so a stale copy on the cluster fails silently. Refuse to run on one.
-if ! grep -q "scene_only_object_user" src/attack_stage1.py || ! grep -q "RANDOM_OBJECT_LIST" src/system_prompts_2.py \
-   || ! grep -q "system_prompt_name" scripts/attack_stage_1.sub; then
+if ! grep -q "scene_only_object_user" src/attack_stage1.py || ! grep -q "null_edit" src/attack_stage1.py \
+   || ! grep -q "RANDOM_OBJECT_LIST" src/system_prompts_2.py || ! grep -q "system_prompt_name" scripts/attack_stage_1.sub; then
     echo "ERROR: src/attack_stage1.py, src/system_prompts_2.py or scripts/attack_stage_1.sub predates RQ2 -- copy the current ones over." >&2
     exit 1
 fi
@@ -80,7 +90,7 @@ fi
 
 echo "target: $TARGET | prompt: $PROMPT | n=$N k=$K | input: $INPUT_CSV | filter: $EVAL_CSV | output: $OUT_CSV"
 
-if [ "$PROMPT" = "random_list" ]; then
+if [ "$PROMPT" = "random_list" ] || [ "$PROMPT" = "null_edit" ]; then
     $PYTHON src/attack_stage1.py \
         --input_csv_path "$INPUT_CSV" \
         --baseline_evaluation_path "$EVAL_CSV" \
