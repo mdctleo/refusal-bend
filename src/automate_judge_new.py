@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from system_prompts_2 import llm_judge_system_prompt, llm_judge_user_prompt
 
-# Load GENAI_API_KEY (or GEMINI_API_KEY) from .devcontainer/.env (also injected as
+# Load GEMINI_API_KEY from .devcontainer/.env (also injected as
 # real env vars via the devcontainer's --env-file at container start) or a repo-root
 # .env. override=False so an already-set environment variable always wins. Loading
 # the file directly means a freshly-added key works without rebuilding the container.
@@ -33,11 +33,11 @@ def _get_client():
     """Lazily create a shared google.genai client (safe to reuse across threads)."""
     global _CLIENT
     if _CLIENT is None:
-        api_key = os.getenv("GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "No Gemini API key found. Set GENAI_API_KEY (or GEMINI_API_KEY) in a "
-                ".env file at the repo root or in the environment."
+                "No Gemini API key found. Set GEMINI_API_KEY in a .env file at the repo root "
+                "or in the environment."
             )
         _CLIENT = genai.Client(api_key=api_key)
     return _CLIENT

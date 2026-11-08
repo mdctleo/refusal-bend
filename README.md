@@ -18,7 +18,7 @@ Python 3.12 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync
-cp .env.example .env   # set GENAI_API_KEY and GEMINI_API_KEY (Gemini API keys)
+cp .env.example .env   # set GEMINI_API_KEY
 ```
 
 The proposer and the scene editor run on a GPU node through SLURM. Every other stage runs locally.

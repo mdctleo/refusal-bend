@@ -1,0 +1,70 @@
+#!/bin/bash
+# FILENAME: serve_plan.sub
+# GPU-side half of the plan stage for a self-served target: serve the model with vLLM on this node,
+# run scripts/submit_plans.sh against it, stop the server. Submitted by scripts/run_rq1.sh when the
+# target has a VLLM_MODEL (plan / requery stages); not normally run by hand. The arguments are
+# submit_plans.sh's own:
+#   sbatch scripts/serve_plan.sub baseline 8
+#   sbatch scripts/serve_plan.sub targeted --rang 0,4000
+#   sbatch scripts/serve_plan.sub requery 8
+#
+# Environment (exported by run_rq1.sh, propagated by sbatch):
+#   VLLM_MODEL          Hugging Face id served by vLLM, e.g. nvidia/Cosmos-Reason2-8B
+#   MODEL               LiteLLM model string the planner sends, e.g. hosted_vllm/nvidia/Cosmos-Reason2-8B
+#   TARGET              target name that selects the CSVs
+#   SYSTEM_PROMPT_NAME  constitution variant
+#   NSHARDS             parallel slices (submit_plans.sh default 4)
+#
+# plans_generator.py writes a slice only when the slice finishes, so every slice must complete inside
+# --time; size the --rang of the targeted run from the smoke test's per-query time.
+#SBATCH -A antoniob
+#SBATCH -p a100-80gb
+#SBATCH --mem=128G
+#SBATCH --gres=gpu:1
+#SBATCH --qos=standby
+#SBATCH --time=4:00:00
+#SBATCH -J serve_plan_%j
+#SBATCH -o serve_plan_%j.out
+
+host=`hostname -s`
+echo $CUDA_VISIBLE_DEVICES
+
+module load external
+module load conda
+conda activate er-model-vllm
+
+VLLM_MODEL="${VLLM_MODEL:?VLLM_MODEL is not set}"
+PORT=$((20000 + SLURM_JOB_ID % 10000))
+VLLM_LOG="vllm_${SLURM_JOB_ID}.log"
+
+echo "serving $VLLM_MODEL on $host:$PORT (log: $VLLM_LOG)"
+vllm serve "$VLLM_MODEL" \
+    --reasoning-parser qwen3 \
+    --max-model-len 16384 \
+    --gpu-memory-utilization 0.90 \
+    --port "$PORT" > "$VLLM_LOG" 2>&1 &
+SERVER=$!
+
+# Wait for the server (model load takes minutes); give up after 30 minutes.
+ready=0
+for i in $(seq 1 180); do
+    if curl -sf "http://localhost:$PORT/health" > /dev/null 2>&1; then ready=1; break; fi
+    if ! kill -0 "$SERVER" 2>/dev/null; then break; fi
+    sleep 10
+done
+if [ "$ready" -ne 1 ]; then
+    echo "ERROR: vLLM did not become ready; last lines of $VLLM_LOG:" >&2
+    tail -n 40 "$VLLM_LOG" >&2
+    kill "$SERVER" 2>/dev/null
+    exit 1
+fi
+echo "server ready after $((i * 10)) s"
+
+export HOSTED_VLLM_API_BASE="http://localhost:$PORT/v1"
+export PYTHON="${PYTHON:-python}"
+bash scripts/submit_plans.sh "$@"
+rc=$?
+
+kill "$SERVER" 2>/dev/null
+wait "$SERVER" 2>/dev/null
+exit $rc

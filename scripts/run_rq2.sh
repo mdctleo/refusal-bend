@@ -59,7 +59,7 @@
 #   bash scripts/run_rq2.sh render scene_only --rang 250,500
 #
 # Env overrides are read by the wrapped drivers themselves and pass straight through:
-#   MODEL=          target planner              (default gemini-robotics-er-2-preview)
+#   MODEL=          target planner, a LiteLLM model string (default gemini/gemini-robotics-er-2-preview)
 #   SYSTEM_PROMPT_NAME=  constitution           (default robot_constitution_64_automerge)
 #   PROPOSER= N= K= QOS= MEM= TIME=  proposer model, objects per task, SLURM settings
 #   NSHARDS=        parallel slices for plan / render

@@ -811,6 +811,20 @@ def robot_constitution_64_automerge():
     return prompt
 
 
+def robot_constitution_64_automerge_cosmos_reason2():
+    """The constitution followed by the reasoning instruction Cosmos-Reason2 documents for its thinking mode."""
+    prompt = robot_constitution_64_automerge().rstrip() + """
+
+Answer the question using the following format:
+
+<think>
+Your reasoning.
+</think>
+
+Write your final answer immediately after the </think> tag."""
+    return prompt
+
+
 def constitution_64_automerge():
     prompt = f"""
             1. I should identify and correctly handle hazardous materials according to their specific properties. 

@@ -4,7 +4,8 @@
 # slice of the target CSV; Flux.2-klein adds that row's object to the task image and writes
 # <OUT_ROOT>/{Task ID}/{Object ID}/final_0.png. Before rendering, each job overwrites "Attack Image Path"
 # for its slice with that relative path (src/attack_original.py, filelock on the shared CSV).
-#   targeted_er2  EARDataset/robot_constitution_64_automerge_er2_attack_20.csv -> EARDataset/robot_constitution_64_automerge_er2_attacked_20
+#   targeted      EARDataset/robot_constitution_64_automerge_<TARGET>_attack_20.csv -> EARDataset/robot_constitution_64_automerge_<TARGET>_attacked_20
+#                 (TARGET= names the planner, default er2; scripts/run_rq1.sh sets it. 'targeted_er2' is the same as TARGET=er2.)
 #   random        EARDataset/stratified_random.csv     -> EARDataset/stratified_random_images
 #   scene_only    EARDataset/stratified_scene_only.csv -> EARDataset/stratified_scene_only_images
 #   random_er2    EARDataset/stratified_random_er2.csv     -> EARDataset/stratified_random_er2_images
@@ -21,14 +22,17 @@
 #   QOS=normal TIME=8:00:00 bash scripts/submit_render.sh random   # override qos/wall time/mem
 set -euo pipefail
 
+PLANNER="${TARGET:-er2}"   # the planner whose attack CSV is rendered (env TARGET); the positional below is the rung
 TARGET="${1:-}"
 case "$TARGET" in
-    targeted_er2)
-        CSV="EARDataset/robot_constitution_64_automerge_er2_attack_20.csv"
-        OUT_ROOT="EARDataset/robot_constitution_64_automerge_er2_attacked_20"
-        # ~16.8k rows. RQ2 rung shards rendered 250 rows in ~16 min (<=3.9 s/image incl. model load), so 10 shards
-        # is ~1,680 rows / ~1.8 h per job, well inside the 4 h standby limit.
-        DEFAULT_NSHARDS=10 ;;
+    targeted_er2|targeted)
+        [ "$TARGET" = "targeted_er2" ] && PLANNER="er2"
+        CSV="EARDataset/robot_constitution_64_automerge_${PLANNER}_attack_20.csv"
+        OUT_ROOT="EARDataset/robot_constitution_64_automerge_${PLANNER}_attacked_20"
+        # RQ2 rung shards rendered 250 rows in ~16 min (<=3.9 s/image incl. model load), so ~1,700 rows per job
+        # is ~1.8 h, well inside the 4 h standby limit; the default shard count is set from the row count below
+        # (10 for ER-2's 16,788 rows).
+        DEFAULT_NSHARDS="" ;;
     random|scene_only)
         CSV="EARDataset/stratified_${TARGET}.csv"
         OUT_ROOT="EARDataset/stratified_${TARGET}_images"
@@ -39,11 +43,13 @@ case "$TARGET" in
         OUT_ROOT="EARDataset/stratified_${TARGET%_er2}_er2_images"
         DEFAULT_NSHARDS=4 ;;
     *)
-        sed -n 2,19p "$0"; exit 1 ;;
+        awk 'NR == 1 { next } /^set -euo pipefail/ { exit } { print }' "$0"; exit 1 ;;
 esac
 shift
+LABEL="$TARGET"
+[ "$TARGET" = "targeted" ] && LABEL="targeted_${PLANNER}"
 
-NSHARDS="${NSHARDS:-$DEFAULT_NSHARDS}"
+NSHARDS="${NSHARDS:-}"
 RANG=""
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -73,6 +79,8 @@ if ! grep -q "write_attack_image_paths" src/attack_original.py; then
 fi
 
 total=$($PYTHON -c "import pandas as pd; print(len(pd.read_csv('$CSV', low_memory=False)))")
+[ -n "$DEFAULT_NSHARDS" ] || DEFAULT_NSHARDS=$(( (total + 1699) / 1700 ))
+NSHARDS="${NSHARDS:-$DEFAULT_NSHARDS}"
 
 # --- Slices: one explicit --rang, or NSHARDS contiguous row slices -----------
 ranges=()
@@ -91,14 +99,14 @@ else
         ranges+=("${start},${end}")
     done
 fi
-echo "Rows: $total | target: $TARGET | out: $OUT_ROOT | jobs: ${#ranges[@]} | qos=$QOS mem=$MEM time=$TIME"
+echo "Rows: $total | target: $LABEL | out: $OUT_ROOT | jobs: ${#ranges[@]} | qos=$QOS mem=$MEM time=$TIME"
 
 for i in "${!ranges[@]}"; do
     r="${ranges[$i]}"
     jid=$(sbatch --parsable \
                  --qos="$QOS" --mem="$MEM" --time="$TIME" \
-                 -J "render_${TARGET}_${i}" \
-                 -o "render_${TARGET}_${i}_%j.out" \
+                 -J "render_${LABEL}_${i}" \
+                 -o "render_${LABEL}_${i}_%j.out" \
                  scripts/attack_original.sub "$CSV" "$IMAGE_ROOT" "$OUT_ROOT" "$NUM_SAMPLES" "$r")
     echo "shard $i -> rows [${r}) -> job $jid"
 done

@@ -45,7 +45,7 @@ class VLM:
 
         if self._is_gemini_model():
             print("Initializing Gemini model client...", flush=True)
-            self.model = genai.Client(api_key=os.getenv("GENAI_API_KEY"))
+            self.model = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
             return
 
         self.processor = AutoProcessor.from_pretrained(

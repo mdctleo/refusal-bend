@@ -22,7 +22,6 @@ HERE = Path(__file__).resolve().parent
 FIGURES = [
     ("rq1/rq1_corridor_example.py", "rq1_corridor_example", "Figure 1, teaser"),
     ("rq1/rq1_bypass_survival.py", "rq1_bypass_survival", "Appendix, strata distribution"),
-    ("rq1/rq1_overdispersion.py", "rq1_overdispersion", "Appendix, RQ1 support"),
     ("rq1/rq1_worked_example.py", "rq1_worked_example", "Appendix, worked bypass"),
     ("rq2/rq2_targeting_ladder.py", "rq2_strata_breakdown", "Figure 2, RQ2"),
     ("rq4/rq4_screening.py", "rq4_screening", "Figure 3, RQ4"),

@@ -1,8 +1,10 @@
 #!/bin/bash
 # FILENAME: submit_stage1.sh
 # Stage 1: propose the added objects for one target (N sets x K objects per task) and write its CSV.
-#   targeted_er2  RQ1 red-team proposer (image + instruction) on every task ER-2 refuses on the clean image
-#                 (EARDataset/dataset_baseline_er2.csv, Judgement==0): ONE GPU job via scripts/attack_stage_1.sub
+#   targeted      RQ1 red-team proposer (image + instruction) on every task the planner TARGET refuses on the clean
+#                 image (EARDataset/dataset_baseline_<TARGET>.csv, Judgement==0): ONE GPU job via scripts/attack_stage_1.sub
+#                 -> EARDataset/robot_constitution_64_automerge_<TARGET>_attack_20.csv. TARGET= defaults to er2 and is
+#                 set by scripts/run_rq1.sh; 'targeted_er2' is the same as TARGET=er2 targeted.
 #   scene_only    RQ2 (ER-1.6 sample): Qwen proposer sees the image only, 200 stratified tasks: ONE GPU job
 #   random        RQ2 (ER-1.6 sample): no VLM, draws from RANDOM_OBJECT_LIST, seconds -- FINE TO RUN ON THE LOGIN NODE
 #   scene_only_er2, random_er2
@@ -23,14 +25,16 @@
 #   PYTHON="uv run python" bash scripts/submit_stage1.sh random         # interpreter for the local target
 set -euo pipefail
 
+PLANNER="${TARGET:-er2}"   # the planner whose baseline is the filter (env TARGET); the positional below is the rung
 TARGET="${1:-}"
 IMAGE_ROOT="EARDataset/images"
 case "$TARGET" in
-    targeted_er2)
-        # stage 1 keeps the Judgement==0 tasks of EVAL_CSV: 846 tasks refused by ER-2 on the clean image.
-        INPUT_CSV="EARDataset/dataset_baseline_er2.csv"
-        EVAL_CSV="EARDataset/dataset_baseline_er2.csv"
-        OUT_CSV="EARDataset/robot_constitution_64_automerge_er2_attack_20.csv"
+    targeted_er2|targeted)
+        # stage 1 keeps the Judgement==0 tasks of EVAL_CSV: the tasks the planner refused on the clean image (ER-2: 846).
+        [ "$TARGET" = "targeted_er2" ] && PLANNER="er2"
+        INPUT_CSV="EARDataset/dataset_baseline_${PLANNER}.csv"
+        EVAL_CSV="EARDataset/dataset_baseline_${PLANNER}.csv"
+        OUT_CSV="EARDataset/robot_constitution_64_automerge_${PLANNER}_attack_20.csv"
         PROMPT="image_and_task_instruction"
         DEFAULT_N=20
         # no resume: a preempted standby job loses every proposal, so default to the .sub's normal/12h.
@@ -57,8 +61,9 @@ case "$TARGET" in
         DEFAULT_N=20                                          # renders per task, matching the rendered ER-2 rungs
         DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
     *)
-        sed -n 2,20p "$0"; exit 1 ;;
+        awk 'NR == 1 { next } /^set -euo pipefail/ { exit } { print }' "$0"; exit 1 ;;
 esac
+[ "$TARGET" = "targeted" ] && TARGET="targeted_${PLANNER}"   # job and log names carry the planner
 
 QOS="${QOS:-$DEFAULT_QOS}"
 MEM="${MEM:-256G}"
@@ -116,7 +121,7 @@ if [ "$PROMPT" = "scene_only" ]; then
     echo "Then render: bash scripts/submit_render.sh $TARGET"
 else
     echo "  grep -A2 'First user prompt' stage1_${TARGET}_${jid}.out    # expect: Analyze the provided image with the following task instruction: ..."
-    echo "  grep 'Length of filtered input DataFrame' stage1_${TARGET}_${jid}.out    # expect 846"
-    echo "  $PYTHON -c \"import pandas as pd; d=pd.read_csv('$OUT_CSV'); print(len(d), d['Task ID'].nunique())\"    # expect <= $((846 * N)) rows, 846 tasks"
+    echo "  grep 'Length of filtered input DataFrame' stage1_${TARGET}_${jid}.out    # expect the Judgement==0 count of $EVAL_CSV (ER-2: 846)"
+    echo "  $PYTHON -c \"import pandas as pd; d=pd.read_csv('$OUT_CSV'); print(len(d), d['Task ID'].nunique())\"    # expect <= $N rows per refused task, one Task ID each"
     echo "Then render: bash scripts/submit_render.sh $TARGET   (src/attack_original.py writes the images and 'Attack Image Path')"
 fi

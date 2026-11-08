@@ -3,17 +3,27 @@ import os
 import glob
 from tqdm import tqdm
 from filelock import FileLock
-from google import genai
-from google.genai import types
+import json
 import time
-from system_prompts_2 import robot_constitution_64_automerge
+from system_prompts_2 import robot_constitution_64_automerge, robot_constitution_64_automerge_cosmos_reason2
+from query_litellm import complete, target_params
 from argparse import ArgumentParser
 
 
+DEFAULT_MODEL = "gemini/gemini-robotics-er-2-preview"
+
+
 class PlanGenerator():
-    def __init__(self, model="gemini-robotics-er-1.6-preview"):
-        self.client = genai.Client(api_key=os.getenv("GENAI_API_KEY"))
-        self.model=model
+    """Queries the target planner on each task image and writes Response / Thinking back to the CSV.
+
+    `model` is a LiteLLM model string; its prefix selects the provider and the decoding each
+    provider receives is defined by `query_litellm.target_params`, printed once here.
+    """
+
+    def __init__(self, model=DEFAULT_MODEL):
+        self.model = model
+        print(f"Target: {model}", flush=True)
+        print(f"Decoding: {json.dumps(target_params(model), default=str)}", flush=True)
 
 
     
@@ -51,8 +61,13 @@ class PlanGenerator():
             start, end = rang
             df = df.iloc[start:end]
 
-        if system_prompt_name == "robot_constitution_64_automerge":
-            system_prompt = robot_constitution_64_automerge()
+        system_prompts = {
+            "robot_constitution_64_automerge": robot_constitution_64_automerge,
+            "robot_constitution_64_automerge_cosmos_reason2": robot_constitution_64_automerge_cosmos_reason2,
+        }
+        if system_prompt_name not in system_prompts:
+            raise ValueError(f"Unknown system prompt {system_prompt_name!r}; expected one of {sorted(system_prompts)}.")
+        system_prompt = system_prompts[system_prompt_name]()
 
         responses = []
         for idx, row in tqdm(df.iterrows(), desc="Generating plans", total=len(df)):
@@ -73,7 +88,7 @@ class PlanGenerator():
                 continue
 
             for image_path in image_paths:
-                result = self.query_gemini_er(
+                result = self.query_target(
                     user_text=instruction,
                     image_path=image_path,
                     system_prompt=system_prompt
@@ -126,78 +141,36 @@ class PlanGenerator():
             df.to_csv(output_path, index=False)
 
 
-    def query_gemini_er(
+    def query_target(
         self,
         user_text: str,
         image_path: str,
-        image_mime: str = "image/png",
+        system_prompt: str = "",
         max_retries: int = 3,
         retry_delay: float = 2.0,
-        system_prompt: str = ""
-    ) -> str:
+    ) -> dict:
+        """One planner query on `image_path` with `user_text` under `system_prompt`.
+
+        Retries up to `max_retries` times on any error. Returns {"thinking": ..., "text": ...};
+        both empty strings if every attempt fails.
         """
-        Deterministic Gemini-ER-1.5 query with system instruction.
-        - Retries: Retries the query up to `max_retries` times in case of failure.
-        - Determinism: temperature=0, top_k=1 (greedy). top_p=1.0 is included for completeness.
-        - image: optional path (str) or raw bytes (bytes)
-        Returns: response text (best-effort) or an empty string if all retries fail.
-        """
-        parts = []
-
-        with open(image_path, "rb") as f:
-            img_bytes = f.read()
-
-        parts.append(types.Part.from_bytes(data=img_bytes, mime_type=image_mime))
-        parts.append(user_text)
-
         for attempt in range(max_retries):
             try:
-                resp = self.client.models.generate_content(
-                    model=self.model,
-                    contents=parts,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        temperature=0.0,
-                        top_p=1.0,
-                        top_k=1,
-                        max_output_tokens=4096,
-                        seed=42,
-                        thinking_config=types.ThinkingConfig(
-                            thinking_budget=2048  # Range: 0 to 32768 (model dependent)
-                        )
-                    ),
-                )
-                
-                # Extract thinking and text from response
-                thinking_text = ""
-                response_text = resp.text
-                
-                # Extract thinking trace from response parts
-                if hasattr(resp, 'candidates') and len(resp.candidates) > 0:
-                    candidate = resp.candidates[0]
-                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                        for part in candidate.content.parts:
-                            if hasattr(part, 'thought'):
-                                thinking_text = part.thought
-                                break
-                
-                print("Response:", response_text, flush=True)
-                if thinking_text:
-                    print("Thinking trace:", thinking_text, flush=True)
-                
-                return {"thinking": thinking_text, "text": response_text}
-     
-                    
+                result = complete(self.model, system_prompt, user_text, image_path)
+                print("Response:", result["text"], flush=True)
+                if result["thinking"]:
+                    print("Thinking trace:", result["thinking"], flush=True)
+                return result
             except Exception as e:
                 print(f"Attempt {attempt + 1}/{max_retries} failed: {e}", flush=True)
                 time.sleep(retry_delay)
 
         print(f"All {max_retries} attempts failed. Returning empty string.", flush=True)
         return {"thinking": "", "text": ""}
-    
+
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Generate plans for visual location tasks using Gemini-ER.")
+    parser = ArgumentParser(description="Query the target planner on every task image of a CSV.")
     parser.add_argument("--input_csv_path", type=str, required=True, help="Path to the input CSV file containing tasks.")
     parser.add_argument("--output_csv_path", type=str, required=True, help="Path to the output CSV file to save results.")
     parser.add_argument("--image_root", type=str, required=True, help="Root directory where images are stored.")
@@ -206,7 +179,9 @@ if __name__ == "__main__":
     parser.add_argument("--is_attack", action='store_true', help="Whether the input CSV is for attack tasks (uses Attack Image Path).")
     parser.add_argument("--is_expand", action='store_true', help="Whether to run the expansion step for evaluation (generates Attack Image Path).")
     parser.add_argument("--system_prompt_name", type=str, default="robot_constitution_64_automerge", help="Name of the system prompt to use.")
-    parser.add_argument("--model", type=str, default="gemini-robotics-er-1.6-preview", help="Gemini target model to plan with.")
+    parser.add_argument("--model", type=str, default=DEFAULT_MODEL,
+                        help="Target planner as a LiteLLM model string, e.g. gemini/gemini-robotics-er-2-preview, "
+                             "anthropic/claude-opus-5-5, openai/gpt-5.4-1, hosted_vllm/nvidia/Cosmos3-Nano.")
 
     args = parser.parse_args()
     if args.rang is not None:
