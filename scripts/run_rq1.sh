@@ -65,7 +65,8 @@
 #   TARGET=         target name from the table above (default er2); sets MODEL and SYSTEM_PROMPT_NAME
 #   MODEL=          target planner, a LiteLLM model string (overrides the table)
 #   SYSTEM_PROMPT_NAME=  constitution           (overrides the table)
-#   PROPOSER= N= QOS= MEM= TIME=  proposer model, objects per task, SLURM settings
+#   PROPOSER= N= QOS= MEM= TIME=  proposer model, objects per task, SLURM settings (QOS/MEM/TIME also
+#                   apply to a self-served target's plan / requery job; default standby / 128G / 4:00:00)
 #   NSHARDS=        parallel slices for plan / requery / render
 #   FORCE=1         let 'propose' overwrite an existing attack CSV
 # This script's own:
@@ -138,10 +139,12 @@ plan_stage() {
         return
     fi
     need_file "scripts/serve_plan.sub"
-    local jid
-    jid=$(sbatch --parsable -J "serve_plan_${TARGET}_${1}" -o "serve_plan_${TARGET}_${1}_%j.out" \
+    # QOS= MEM= TIME= override the .sub's SLURM settings (standby / 128G / 4h), as for propose and render.
+    local qos="${QOS:-standby}" mem="${MEM:-128G}" time="${TIME:-4:00:00}" jid
+    jid=$(sbatch --parsable --qos="$qos" --mem="$mem" --time="$time" \
+                 -J "serve_plan_${TARGET}_${1}" -o "serve_plan_${TARGET}_${1}_%j.out" \
                  scripts/serve_plan.sub "$@")
-    echo "plan ($TARGET: $*) -> job $jid -> serve_plan_${TARGET}_${1}_${jid}.out (vLLM log: vllm_${jid}.log)"
+    echo "plan ($TARGET: $*, qos=$qos mem=$mem time=$time) -> job $jid -> serve_plan_${TARGET}_${1}_${jid}.out (vLLM log: vllm_${jid}.log)"
     echo "When it finishes, check the .out for 'Empty Response rows' and copy the CSV over before judging."
 }
 
