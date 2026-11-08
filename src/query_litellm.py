@@ -155,6 +155,8 @@ def query_image_pair(
 # The azure_* prefixes are this repository's names: `resolve_target` turns them into the LiteLLM
 # provider that serves the endpoint and attaches the endpoint and key. The other prefixes are
 # LiteLLM providers and pass through unchanged, with LiteLLM reading their credentials.
+# An azure_* prefix names the endpoint's protocol, not the model's maker: Foundry serves every
+# catalog model except Claude on the OpenAI-protocol endpoint (azure_openai/Kimi-K2.6).
 #
 # Each provider receives the subset of the decoding recipe its API accepts; `target_params` is the
 # single place that mapping lives, and it is printed once per run so the log records what was sent.
@@ -194,6 +196,7 @@ def target_params(
     max_tokens: int = 4096,
     thinking_budget: int = 2048,
     reasoning_effort: str = "medium",
+    kimi_max_tokens: int = 8192,
 ) -> dict:
     """The request parameters `complete` sends for `model`, by the provider `resolve_target` maps it to.
 
@@ -204,6 +207,9 @@ def target_params(
                    Anthropic route, azure_anthropic/) takes the same.
     openai         max_tokens, seed and `reasoning_effort`; reasoning models take no temperature or
                    top_p, and the API returns no reasoning text. azure_openai/ is this provider.
+                   Kimi (azure_openai/Kimi-K2.6) takes max_tokens and seed: the model fixes temperature
+                   and top_p, thinks on every request with no budget parameter and returns the thinking
+                   text; the thinking counts inside max_tokens, so its cap is `kimi_max_tokens`.
     hosted_vllm    temperature, top_p, top_k, seed, max_tokens; reasoning is configured on the server.
     litellm_proxy  the full recipe, mapped by the gateway for whichever provider serves the model.
     """
@@ -217,6 +223,8 @@ def target_params(
         return dict(max_tokens=max_tokens,
                     thinking={"type": "enabled", "budget_tokens": thinking_budget})
     if provider == "openai":
+        if "kimi" in litellm_model.lower():
+            return dict(max_tokens=kimi_max_tokens, seed=seed)
         return dict(max_tokens=max_tokens, seed=seed, reasoning_effort=reasoning_effort)
     if provider == "hosted_vllm":
         return dict(temperature=temperature, top_p=top_p, seed=seed, max_tokens=max_tokens,
