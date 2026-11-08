@@ -24,9 +24,10 @@
 #     requery    EARDataset/dataset_requery_<TARGET>.csv                         (the refused tasks, clean image)
 #   'plan' takes baseline or targeted; the re-query arm has its own stage.
 #
-# Two CSVs are made by hand before their stage, for every target:
-#   baseline  the realistic tasks of EARDataset/dataset.csv, task columns only (1,121 rows):
-#     uv run python -c "import pandas as pd; d=pd.read_csv('EARDataset/dataset.csv'); d[d.isRealistic==1].to_csv('EARDataset/dataset_baseline_<TARGET>.csv', index=False)"
+# The baseline CSV is created by 'plan baseline' when it does not exist yet: the realistic tasks of
+# EARDataset/dataset.csv (isRealistic == 1, 1,121 rows), task columns only, so every target starts
+# from the same clean task list. An existing baseline CSV is never rewritten by this step.
+# One CSV is made by hand before its stage, for every target:
 #   requery   the refused rows of the judged baseline with the result columns blanked:
 #     uv run python -c "import pandas as pd; d=pd.read_csv('EARDataset/dataset_baseline_<TARGET>.csv'); d=d[d.Judgement==0].copy(); d[['Response','Thinking','Judgement','Judgement Reason']]=''; d.to_csv('EARDataset/dataset_requery_<TARGET>.csv', index=False)"
 #
@@ -71,11 +72,16 @@
 #   FORCE=1         let 'propose' overwrite an existing attack CSV
 # This script's own:
 #   JUDGE_MODEL=    judge model                 (default gemini-2.5-flash)
+#   PYTHON=         interpreter for the baseline-CSV step (default: uv run python if uv exists, else python)
 #   LOGDIR=         where the run logs go       (default the repo root, as before)
 set -euo pipefail
 
 JUDGE_MODEL="${JUDGE_MODEL:-gemini-2.5-flash}"
 LOGDIR="${LOGDIR:-.}"
+# Interpreter for this script's own pandas step: the uv environment where there is one, else python.
+if [ -z "${PYTHON:-}" ]; then
+    if command -v uv > /dev/null 2>&1; then PYTHON="uv run python"; else PYTHON="python"; fi
+fi
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -163,7 +169,19 @@ case "$STAGE" in
             *)        die "plan takes a CSV name: baseline | targeted" ;;
         esac
         need_file "scripts/submit_plans.sh"
-        need_file "$(target_csv "$CSV_NAME")" "Run the earlier stages first (the baseline CSV is made by hand; see the header)."
+        if [ "$CSV_NAME" = "baseline" ] && [ ! -f "$(target_csv baseline)" ]; then
+            # First query of this target: start from the clean task list, no result columns.
+            need_file "EARDataset/dataset.csv"
+            $PYTHON - "$(target_csv baseline)" <<'PYEOF'
+import sys
+import pandas as pd
+d = pd.read_csv("EARDataset/dataset.csv", low_memory=False)
+d = d[d["isRealistic"] == 1]
+d.to_csv(sys.argv[1], index=False)
+print(f"wrote {sys.argv[1]}: {len(d)} realistic tasks from EARDataset/dataset.csv")
+PYEOF
+        fi
+        need_file "$(target_csv "$CSV_NAME")" "Run the earlier stages first."
         plan_stage "plan_${CSV_NAME}${SUFFIX}" "$RUNG" "$@"
         ;;
 
