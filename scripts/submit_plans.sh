@@ -24,9 +24,9 @@
 #
 # TARGET names the planner whose RQ1 CSVs 'baseline', 'targeted' and 'requery' resolve to (default er2;
 # 'targeted_er2' is the same as TARGET=er2 targeted). scripts/run_rq1.sh sets it from its target table.
-# MODEL is a LiteLLM model string; the prefix picks the provider and its credentials (see
-# src/query_litellm.py): gemini/ anthropic/ openai/ hosted_vllm/ litellm_proxy/
-#   MODEL=anthropic/claude-opus-5-5 bash scripts/submit_plans.sh baseline
+# MODEL is a {provider}/{model} string; the prefix picks the route and its credentials (see
+# src/query_litellm.py): gemini/ azure_openai/ azure_anthropic/ hosted_vllm/ anthropic/ openai/ litellm_proxy/
+#   MODEL=azure_anthropic/claude-opus-5-5 bash scripts/submit_plans.sh baseline
 # A hosted_vllm/ target is served on the GPU node that runs this script: scripts/run_rq1.sh submits
 # scripts/serve_plan.sub, which sets HOSTED_VLLM_API_BASE and PYTHON=python before calling this script.
 set -euo pipefail
@@ -103,13 +103,15 @@ need_env() {
     fi
 }
 case "$MODEL" in
-    gemini/*)        need_env GEMINI_API_KEY ;;
-    anthropic/*)     need_env ANTHROPIC_API_KEY ;;
-    openai/*)        need_env OPENAI_API_KEY ;;
-    hosted_vllm/*)   need_env HOSTED_VLLM_API_BASE ;;
-    litellm_proxy/*) need_env LITELLM_PROXY_API_BASE ;;
+    gemini/*)          need_env GEMINI_API_KEY ;;
+    azure_openai/*)    need_env AZURE_OPENAI_API_BASE;    need_env AZURE_API_KEY ;;
+    azure_anthropic/*) need_env AZURE_ANTHROPIC_API_BASE; need_env AZURE_API_KEY ;;
+    hosted_vllm/*)     need_env HOSTED_VLLM_API_BASE ;;
+    anthropic/*)       need_env ANTHROPIC_API_KEY ;;
+    openai/*)          need_env OPENAI_API_KEY ;;
+    litellm_proxy/*)   need_env LITELLM_PROXY_API_BASE ;;
     *)
-        echo "ERROR: MODEL must carry a LiteLLM provider prefix (gemini/ anthropic/ openai/ hosted_vllm/ litellm_proxy/): $MODEL" >&2
+        echo "ERROR: MODEL must carry a route prefix (gemini/ azure_openai/ azure_anthropic/ hosted_vllm/ anthropic/ openai/ litellm_proxy/): $MODEL" >&2
         exit 1 ;;
 esac
 

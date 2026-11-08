@@ -141,19 +141,48 @@ def query_image_pair(
 
 # --- Target planner queries ---------------------------------------------------------------------
 #
-# The target model is named by a LiteLLM model string whose prefix selects the provider; credentials
-# and endpoints come from the environment (or the repo-root .env) under LiteLLM's variable names:
+# The target model is named by a `{provider}/{model}` string. The prefix selects the route and the
+# credentials it reads from the environment (or the repo-root .env):
 #
-#   gemini/<model>         Google AI Studio      GEMINI_API_KEY
-#   anthropic/<model>      Anthropic             ANTHROPIC_API_KEY
-#   openai/<model>         OpenAI                OPENAI_API_KEY
-#   hosted_vllm/<model>    a `vllm serve` server HOSTED_VLLM_API_BASE (and HOSTED_VLLM_API_KEY if set)
-#   litellm_proxy/<model>  a LiteLLM gateway     LITELLM_PROXY_API_BASE, LITELLM_PROXY_API_KEY
+#   gemini/<model>              Google AI Studio          GEMINI_API_KEY
+#   azure_openai/<deployment>   Azure Foundry, /openai/v1 AZURE_OPENAI_API_BASE, AZURE_API_KEY
+#   azure_anthropic/<model>     Azure Foundry, /anthropic AZURE_ANTHROPIC_API_BASE, AZURE_API_KEY
+#   hosted_vllm/<model>         a `vllm serve` server     HOSTED_VLLM_API_BASE (and HOSTED_VLLM_API_KEY if set)
+#   anthropic/<model>           Anthropic                 ANTHROPIC_API_KEY
+#   openai/<model>              OpenAI                    OPENAI_API_KEY
+#   litellm_proxy/<model>       a LiteLLM gateway         LITELLM_PROXY_API_BASE, LITELLM_PROXY_API_KEY
+#
+# The azure_* prefixes are this repository's names: `resolve_target` turns them into the LiteLLM
+# provider that serves the endpoint and attaches the endpoint and key. The other prefixes are
+# LiteLLM providers and pass through unchanged, with LiteLLM reading their credentials.
 #
 # Each provider receives the subset of the decoding recipe its API accepts; `target_params` is the
 # single place that mapping lives, and it is printed once per run so the log records what was sent.
 
+# repo prefix -> (LiteLLM provider, env var of the endpoint, env var of the key)
+TARGET_ROUTES = {
+    "azure_openai":    ("openai",   "AZURE_OPENAI_API_BASE",    "AZURE_API_KEY"),
+    "azure_anthropic": ("azure_ai", "AZURE_ANTHROPIC_API_BASE", "AZURE_API_KEY"),
+}
 TARGET_PROVIDERS = ("gemini", "anthropic", "openai", "hosted_vllm", "litellm_proxy")
+
+
+def resolve_target(model: str) -> tuple[str, dict]:
+    """The LiteLLM model string for `model`, and the endpoint kwargs (`api_base`, `api_key`) sent
+    with it: filled from the environment for an azure_* prefix, empty for a LiteLLM provider."""
+    prefix, _, name = model.partition("/")
+    if prefix in TARGET_ROUTES:
+        litellm_prefix, base_var, key_var = TARGET_ROUTES[prefix]
+        missing = [v for v in (base_var, key_var) if not os.environ.get(v)]
+        if missing:
+            raise ValueError(f"{model!r} needs {', '.join(missing)} in the environment or .env.")
+        return f"{litellm_prefix}/{name}", dict(api_base=os.environ[base_var], api_key=os.environ[key_var])
+    if prefix in TARGET_PROVIDERS:
+        return model, {}
+    raise ValueError(
+        f"{model!r}: the model string must start with one of "
+        f"{', '.join(p + '/' for p in (*TARGET_ROUTES, *TARGET_PROVIDERS))}"
+    )
 
 
 def target_params(
@@ -166,28 +195,25 @@ def target_params(
     thinking_budget: int = 2048,
     reasoning_effort: str = "medium",
 ) -> dict:
-    """The request parameters `complete` sends for `model`, by provider.
+    """The request parameters `complete` sends for `model`, by the provider `resolve_target` maps it to.
 
     gemini         temperature, top_p, top_k, seed, max_tokens, and a thinking budget with the
                    thoughts returned (passed as Gemini's own `thinkingConfig`).
     anthropic      max_tokens and extended thinking with the same budget; the Anthropic API does not
-                   accept temperature, top_p or seed alongside thinking.
+                   accept temperature, top_p or seed alongside thinking. azure_ai (the Foundry
+                   Anthropic route, azure_anthropic/) takes the same.
     openai         max_tokens, seed and `reasoning_effort`; reasoning models take no temperature or
-                   top_p, and the API returns no reasoning text.
+                   top_p, and the API returns no reasoning text. azure_openai/ is this provider.
     hosted_vllm    temperature, top_p, top_k, seed, max_tokens; reasoning is configured on the server.
     litellm_proxy  the full recipe, mapped by the gateway for whichever provider serves the model.
     """
-    _, provider, _, _ = litellm.get_llm_provider(model)
-    if provider not in TARGET_PROVIDERS:
-        raise ValueError(
-            f"{model!r}: the model string must start with one of "
-            f"{', '.join(p + '/' for p in TARGET_PROVIDERS)}"
-        )
+    litellm_model, _ = resolve_target(model)
+    _, provider, _, _ = litellm.get_llm_provider(litellm_model)
     if provider == "gemini":
         return dict(temperature=temperature, top_p=top_p, top_k=top_k, seed=seed,
                     max_tokens=max_tokens,
                     thinkingConfig={"includeThoughts": True, "thinkingBudget": thinking_budget})
-    if provider == "anthropic":
+    if provider in ("anthropic", "azure_ai"):
         return dict(max_tokens=max_tokens,
                     thinking={"type": "enabled", "budget_tokens": thinking_budget})
     if provider == "openai":
@@ -217,7 +243,9 @@ def complete(model: str, system_prompt: str, user_text: str, image_path: str | N
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": content}]
 
-    response = litellm.completion(model=model, messages=messages, **target_params(model), **kwargs)
+    litellm_model, endpoint = resolve_target(model)
+    response = litellm.completion(model=litellm_model, messages=messages,
+                                  **target_params(model), **endpoint, **kwargs)
     message = response.choices[0].message
     thinking = getattr(message, "reasoning_content", None)
     if not thinking:

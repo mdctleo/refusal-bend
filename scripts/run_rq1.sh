@@ -16,8 +16,8 @@
 #     cosmosr2  nvidia/Cosmos-Reason2-8B via vLLM     self-served: plan and requery are each ONE GPU JOB
 #                                                     (scripts/serve_plan.sub serves the model on the node
 #                                                     and runs submit_plans.sh there); run them in the cluster clone
-#     gpt54     openai/gpt-5.4-1                      API
-#     opus55    anthropic/claude-opus-5-5             API
+#     gpt54     azure_openai/gpt-5.4-1                Azure Foundry /openai/v1 (the name is the deployment)
+#     opus55    azure_anthropic/claude-opus-5-5       Azure Foundry /anthropic
 #   <csv> is one of:
 #     baseline   EARDataset/dataset_baseline_<TARGET>.csv                        (1,121 tasks, clean image)
 #     targeted   EARDataset/robot_constitution_64_automerge_<TARGET>_attack_20.csv (20 objects per refused task)
@@ -64,7 +64,7 @@
 #
 # Env overrides are read by the wrapped drivers themselves and pass straight through:
 #   TARGET=         target name from the table above (default er2); sets MODEL and SYSTEM_PROMPT_NAME
-#   MODEL=          target planner, a LiteLLM model string (overrides the table)
+#   MODEL=          target planner, a {provider}/{model} string (overrides the table; see src/query_litellm.py)
 #   SYSTEM_PROMPT_NAME=  constitution           (overrides the table)
 #   PROPOSER= N= QOS= MEM= TIME=  proposer model, objects per task, SLURM settings (QOS/MEM/TIME also
 #                   apply to a self-served target's plan / requery job; default standby / 128G / 4:00:00)
@@ -94,8 +94,8 @@ case "$TARGET" in
     er2)      _model="gemini/gemini-robotics-er-2-preview";  _prompt="robot_constitution_64_automerge" ;;
     cosmosr2) _model="hosted_vllm/nvidia/Cosmos-Reason2-8B"; _prompt="robot_constitution_64_automerge_cosmos_reason2"
               VLLM_MODEL="${VLLM_MODEL:-nvidia/Cosmos-Reason2-8B}" ;;
-    gpt54)    _model="openai/gpt-5.4-1";                     _prompt="robot_constitution_64_automerge" ;;
-    opus55)   _model="anthropic/claude-opus-5-5";            _prompt="robot_constitution_64_automerge" ;;
+    gpt54)    _model="azure_openai/gpt-5.4-1";               _prompt="robot_constitution_64_automerge" ;;
+    opus55)   _model="azure_anthropic/claude-opus-5-5";      _prompt="robot_constitution_64_automerge" ;;
     *)        die "unknown TARGET '$TARGET': er2 | cosmosr2 | gpt54 | opus55" ;;
 esac
 MODEL="${MODEL:-$_model}"
