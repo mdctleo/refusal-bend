@@ -19,6 +19,7 @@
 #   bash scripts/submit_plans.sh baseline                       # clean images, EARDataset/dataset_baseline_<TARGET>.csv
 #   bash scripts/submit_plans.sh targeted 8                     # RQ1 attacked images of <TARGET>
 #   bash scripts/submit_plans.sh requery                        # clean re-query, EARDataset/dataset_requery_<TARGET>.csv
+#   CLUSTER=1 bash scripts/submit_plans.sh targeted             # cluster clone: 10 jobs, one slice each (scripts/plan_api.sub)
 # Then judge:
 #   bash scripts/automate_judge_new.sh --input_csv_path EARDataset/stratified_random.csv
 #
@@ -29,6 +30,10 @@
 #   MODEL=azure_anthropic/claude-opus-5-5 bash scripts/submit_plans.sh baseline
 # A hosted_vllm/ target is served on the GPU node that runs this script: scripts/run_rq1.sh submits
 # scripts/serve_plan.sub, which sets HOSTED_VLLM_API_BASE and PYTHON=python before calling this script.
+# CLUSTER=1 (cluster clone) submits every slice as its own job through scripts/plan_api.sub instead of
+# starting local processes, then returns: NSHARDS defaults to 10, QOS/MEM/TIME override the job's
+# standby / 256G / 4:00:00. Each job runs this script on its single --rang, logs to
+# plans_<label>_<start>-<end>.log and checks its own rows; a slice must finish inside the job's time.
 set -euo pipefail
 
 RUNG="${1:-}"
@@ -68,7 +73,9 @@ case "$RUNG" in
 esac
 shift
 
-NSHARDS="${NSHARDS:-4}"
+# CLUSTER=1 submits each slice as its own job (scripts/plan_api.sub) instead of a local process; 10 by default.
+CLUSTER="${CLUSTER:-0}"
+if [ "$CLUSTER" = "1" ]; then NSHARDS="${NSHARDS:-10}"; else NSHARDS="${NSHARDS:-4}"; fi
 RANG=""
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -161,7 +168,15 @@ PYEOF
         failed=1
         continue
     fi
+    if [ "$CLUSTER" = "1" ]; then
+        jid=$(sbatch --parsable --qos="${QOS:-standby}" --mem="${MEM:-256G}" --time="${TIME:-4:00:00}" \
+                     -J "plan_${LABEL}_${i}" -o "plan_${LABEL}_${i}_%j.out" scripts/plan_api.sub "$RUNG" --rang "$r")
+        echo "shard $i -> rows [${r}) -> job $jid -> plan_${LABEL}_${i}_${jid}.out"
+        continue
+    fi
     log="plans_${LABEL}_${i}.log"
+    # A single explicit slice is logged under its row range, so concurrent slices never share a log.
+    [ -n "$RANG" ] && log="plans_${LABEL}_${RANG/,/-}.log"
     # --rang is required: without it plans_generator.py queries every row but writes nothing back.
     $PYTHON src/plans_generator.py \
         --input_csv_path "$CSV" \
@@ -176,6 +191,12 @@ PYEOF
     echo "shard $i -> rows [${r}) -> pid $! -> $log"
 done
 
+if [ "$CLUSTER" = "1" ]; then
+    echo ""
+    echo "${#ranges[@]} job(s) submitted. Each job checks its own rows when it ends; judge once every job has finished."
+    exit $failed
+fi
+
 echo ""
 echo "Waiting for ${#pids[@]} slice(s)..."
 for j in "${!pids[@]}"; do
@@ -188,12 +209,17 @@ for j in "${!pids[@]}"; do
 done
 
 # Rows whose API calls all failed come back as an empty Response rather than an error: don't judge yet.
-if ! $PYTHON - "$CSV" <<'PYEOF'
+# A single explicit slice checks its own rows only.
+if ! $PYTHON - "$CSV" "$RANG" <<'PYEOF'
 import sys
 import pandas as pd
 df = pd.read_csv(sys.argv[1], low_memory=False)
+rang = sys.argv[2]
+if rang:
+    start, end = map(int, rang.split(","))
+    df = df.iloc[start:end]
 empty = df["Response"].fillna("").astype(str).str.strip().eq("")
-print(f"Empty Response rows: {int(empty.sum())}/{len(df)}")
+print(f"Empty Response rows: {int(empty.sum())}/{len(df)}" + (f" in [{rang})" if rang else ""))
 if empty.any():
     print(f"  rows: {empty[empty].index.tolist()[:20]} -- rerun the slices containing them with --rang before judging")
 sys.exit(1 if empty.any() else 0)

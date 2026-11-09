@@ -1,0 +1,27 @@
+#!/bin/bash
+# FILENAME: plan_api.sub
+# One slice of the plan stage for an API target as a cluster job: scripts/submit_plans.sh on a single
+# --rang, one planner process that writes its slice into the CSV under the file lock when it ends.
+# Submitted by scripts/submit_plans.sh when CLUSTER=1, one job per slice; not normally run by hand:
+#   sbatch scripts/plan_api.sub targeted --rang 0,2066
+#
+# Environment (exported by run_rq1.sh, propagated by sbatch): MODEL, TARGET, SYSTEM_PROMPT_NAME.
+# Credentials come from the clone's .env. plans_generator.py writes a slice only when the slice
+# finishes, so the slice must complete inside --time.
+#SBATCH -A antoniob
+#SBATCH -p a100-80gb
+#SBATCH --mem=256G
+#SBATCH --gres=gpu:1
+#SBATCH --qos=standby
+#SBATCH --time=4:00:00
+#SBATCH -J plan_api_%j
+#SBATCH -o plan_api_%j.out
+
+module load external
+module load conda
+conda activate er-model-vllm
+
+export PYTHON="${PYTHON:-python}"
+# This job runs its slice; the submitting shell's CLUSTER=1 must not make it submit again.
+export CLUSTER=0
+bash scripts/submit_plans.sh "$@"

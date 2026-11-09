@@ -70,6 +70,8 @@
 #   PROPOSER= N= QOS= MEM= TIME=  proposer model, objects per task, SLURM settings (QOS/MEM/TIME also
 #                   apply to a self-served target's plan / requery job; default standby / 128G / 4:00:00)
 #   NSHARDS=        parallel slices for plan / requery / render
+#   CLUSTER=1       cluster clone: run an API target's plan / requery as one job per slice (scripts/plan_api.sub,
+#                   10 slices by default, standby / 256G / 4:00:00) instead of local processes
 #   FORCE=1         let 'propose' overwrite an existing attack CSV
 # This script's own:
 #   JUDGE_MODEL=    judge model                 (default gemini-2.5-flash)
