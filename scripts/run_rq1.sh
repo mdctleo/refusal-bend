@@ -19,6 +19,8 @@
 #     gpt54     azure_openai/gpt-5.4-1                Azure Foundry /openai/v1 (the name is the deployment)
 #     opus55    azure_anthropic/claude-opus-5-5       Azure Foundry /anthropic
 #     kimi26    azure_openai/Kimi-K2.6                Azure Foundry /openai/v1 (Moonshot AI's open-weight model)
+#     robobrain25  BAAI/RoboBrain2.5-8B-NV via vLLM   self-served like cosmosr2; the model has no thinking mode,
+#                                                     so it takes the plain constitution and Thinking stays empty
 #   <csv> is one of:
 #     baseline   EARDataset/dataset_baseline_<TARGET>.csv                        (1,121 tasks, clean image)
 #     targeted   EARDataset/robot_constitution_64_automerge_<TARGET>_attack_20.csv (20 objects per refused task)
@@ -100,7 +102,9 @@ case "$TARGET" in
     gpt54)    _model="azure_openai/gpt-5.4-1";               _prompt="robot_constitution_64_automerge" ;;
     opus55)   _model="azure_anthropic/claude-opus-5-5";      _prompt="robot_constitution_64_automerge" ;;
     kimi26)   _model="azure_openai/Kimi-K2.6";               _prompt="robot_constitution_64_automerge" ;;
-    *)        die "unknown TARGET '$TARGET': er2 | cosmosr2 | gpt54 | opus55 | kimi26" ;;
+    robobrain25) _model="hosted_vllm/BAAI/RoboBrain2.5-8B-NV"; _prompt="robot_constitution_64_automerge"
+              VLLM_MODEL="${VLLM_MODEL:-BAAI/RoboBrain2.5-8B-NV}" ;;
+    *)        die "unknown TARGET '$TARGET': er2 | cosmosr2 | gpt54 | opus55 | kimi26 | robobrain25" ;;
 esac
 MODEL="${MODEL:-$_model}"
 SYSTEM_PROMPT_NAME="${SYSTEM_PROMPT_NAME:-$_prompt}"
