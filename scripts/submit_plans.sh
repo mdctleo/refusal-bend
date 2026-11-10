@@ -45,7 +45,7 @@ case "$RUNG" in
     random|scene_only)
         CSV="EARDataset/stratified_${RUNG}.csv"
         IMAGE_ROOT="EARDataset/stratified_${RUNG}_images" ;;
-    random_*|scene_only_*|null_edit_er2)
+    random_*|scene_only_*|null_edit_*)
         # RQ2 rungs on a planner's stratified tasks (submit_stage1.sh / submit_render.sh <rung>_<planner>).
         # The suffix names the CSV only; MODEL and SYSTEM_PROMPT_NAME select the planner that is queried
         # (scripts/run_rq2.sh sets both from TARGET).

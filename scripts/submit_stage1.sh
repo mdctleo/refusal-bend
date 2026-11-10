@@ -11,7 +11,8 @@
 #                 the same two rungs on a planner's stratified tasks (EARDataset/stratified_baseline_<planner>.csv,
 #                 analysis/rq2/stratified_sample.py --target <planner>; ER-2: 194 tasks)
 #                 -> EARDataset/stratified_<rung>_<planner>.csv, e.g. scene_only_er2, random_gpt54
-#   null_edit_er2 RQ2 null-edit control on the same 194 tasks: no VLM, 20 empty object sets per task, so the
+#   null_edit_<planner>
+#                 RQ2 null-edit control on the same stratified tasks: no VLM, 20 empty object sets per task, so the
 #                 editor re-renders the clean image with nothing added -- FINE TO RUN ON THE LOGIN NODE
 #   (attack_stage1.py has no --rang, so this stage is not sharded)
 #
@@ -55,12 +56,13 @@ case "$TARGET" in
         if [ "${TARGET%_*}" = "random" ]; then PROMPT="random_list"; else PROMPT="scene_only"; fi
         DEFAULT_N=5
         DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
-    null_edit_er2)
-        INPUT_CSV="EARDataset/stratified_baseline_er2.csv"   # the 194 tasks, as for the other ER-2 rungs
-        EVAL_CSV="EARDataset/dataset_baseline_er2.csv"
-        OUT_CSV="EARDataset/stratified_null_edit_er2.csv"
+    null_edit_*)
+        PLANNER="${TARGET##*_}"                                      # the rung's suffix names the planner
+        INPUT_CSV="EARDataset/stratified_baseline_${PLANNER}.csv"   # the sampled tasks, as for the planner's other rungs
+        EVAL_CSV="EARDataset/dataset_baseline_${PLANNER}.csv"
+        OUT_CSV="EARDataset/stratified_${TARGET}.csv"
         PROMPT="null_edit"
-        DEFAULT_N=20                                          # renders per task, matching the rendered ER-2 rungs
+        DEFAULT_N=20                                                 # renders per task, matching the rendered rungs
         DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
     *)
         awk 'NR == 1 { next } /^set -euo pipefail/ { exit } { print }' "$0"; exit 1 ;;

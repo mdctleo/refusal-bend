@@ -11,7 +11,7 @@
 #   random_<planner>     EARDataset/stratified_random_<planner>.csv     -> EARDataset/stratified_random_<planner>_images
 #   scene_only_<planner> EARDataset/stratified_scene_only_<planner>.csv -> EARDataset/stratified_scene_only_<planner>_images
 #                  (the RQ2 rungs on a planner's stratified tasks, e.g. random_er2, scene_only_gpt54)
-#   null_edit_er2  EARDataset/stratified_null_edit_er2.csv  -> EARDataset/stratified_null_edit_er2_images
+#   null_edit_<planner>  EARDataset/stratified_null_edit_<planner>.csv -> EARDataset/stratified_null_edit_<planner>_images
 #                  (empty object set: the clean image through the same editor with nothing added, 20 per task)
 # Re-rendering a slice overwrites its images and paths. attack_original.py does not skip existing images.
 #
@@ -38,7 +38,7 @@ case "$TARGET" in
         CSV="EARDataset/stratified_${TARGET}.csv"
         OUT_ROOT="EARDataset/stratified_${TARGET}_images"
         DEFAULT_NSHARDS=4 ;;
-    random_*|scene_only_*|null_edit_er2)
+    random_*|scene_only_*|null_edit_*)
         # RQ2 rungs on a planner's stratified tasks (scripts/submit_stage1.sh <rung>_<planner>).
         CSV="EARDataset/stratified_${TARGET}.csv"
         OUT_ROOT="EARDataset/stratified_${TARGET}_images"

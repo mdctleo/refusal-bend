@@ -19,8 +19,8 @@
 #   <rung> is one of:
 #     random      EARDataset/stratified_random_<TARGET>.csv      fixed 26-item COCO list, no VLM
 #     scene_only  EARDataset/stratified_scene_only_<TARGET>.csv  proposer sees the image, not the instruction
-#     null_edit   EARDataset/stratified_null_edit_er2.csv        no object: the clean image through the same
-#                                                                editor with nothing added, 20 renders per task (er2 only)
+#     null_edit   EARDataset/stratified_null_edit_<TARGET>.csv   no object: the clean image through the same
+#                                                                editor with nothing added, 20 renders per task
 #   Each is the target's stratified tasks x 20 rows (ER-2: 194 tasks).
 #   The 'targeted' rung is RQ1's data -- it is not regenerated here. See scripts/run_rq1.sh.
 #

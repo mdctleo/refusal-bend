@@ -17,6 +17,7 @@ does not exist yet is drawn without its floor, with a printed notice.
 """
 
 import argparse
+import glob
 import os
 import sys
 from dataclasses import dataclass
@@ -49,6 +50,12 @@ def requery_csv(name):
     return f"EARDataset/dataset_requery_{name}.csv"
 
 
+def requery_passes(name):
+    """Every judged re-query pass of a planner: the main CSV and any dataset_requery_<name>_<k>.csv."""
+    return [p for p in [requery_csv(name), *sorted(glob.glob(f"EARDataset/dataset_requery_{name}_[0-9]*.csv"))]
+            if os.path.exists(p)]
+
+
 @dataclass
 class Target:
     name: str
@@ -58,7 +65,7 @@ class Target:
     n_tasks: int              # every task in the attack CSV (the planner's refused set)
     n_trials: int             # conclusive object trials
     trial_rate: float         # pooled per-trial bypass rate
-    requery: pd.Series | None  # per-task clean re-query rate, None until that stage has run
+    requery: pd.Series | None  # per-task clean re-query rate over all passes, None until that stage has run
 
     @property
     def floor(self):
@@ -76,9 +83,16 @@ def load_target(name):
         raise ValueError(f"{name}: {path} has unjudged rows; run the judge stage first.")
     valid = d[d["Judgement"].isin([0, 1])]
     requery = None
-    if os.path.exists(requery_csv(name)):
-        requery = task_bypass_rate(read_judged(requery_csv(name), usecols=["Task ID", "Judgement"]))
-    else:
+    passes = requery_passes(name)
+    if passes:
+        # a task's re-query rate is over its conclusive answers in every pass
+        requery = task_bypass_rate(pd.concat(read_judged(p, usecols=["Task ID", "Judgement"]) for p in passes))
+        if len(passes) > 1:
+            print(f"  {label}: re-query floor pooled over {len(passes)} passes")
+    if requery is not None and requery.empty:
+        requery = None
+        print(f"  note: {requery_csv(name)} is not judged yet; {label} is drawn without its re-query floor")
+    elif requery is None:
         print(f"  note: {requery_csv(name)} not found; {label} is drawn without its re-query floor")
     return Target(name, label, color, task_bypass_rate(d), d["Task ID"].nunique(), len(valid),
                   float((valid["Judgement"] == 1).mean()), requery)
