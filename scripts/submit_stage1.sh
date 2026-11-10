@@ -7,9 +7,10 @@
 #                 set by scripts/run_rq1.sh; 'targeted_er2' is the same as TARGET=er2 targeted.
 #   scene_only    RQ2 (ER-1.6 sample): Qwen proposer sees the image only, 200 stratified tasks: ONE GPU job
 #   random        RQ2 (ER-1.6 sample): no VLM, draws from RANDOM_OBJECT_LIST, seconds -- FINE TO RUN ON THE LOGIN NODE
-#   scene_only_er2, random_er2
-#                 the same two rungs on the 194 ER-2 stratified tasks (EARDataset/stratified_baseline_er2.csv,
-#                 analysis/rq2/stratified_sample.py) -> EARDataset/stratified_<rung>_er2.csv
+#   scene_only_<planner>, random_<planner>
+#                 the same two rungs on a planner's stratified tasks (EARDataset/stratified_baseline_<planner>.csv,
+#                 analysis/rq2/stratified_sample.py --target <planner>; ER-2: 194 tasks)
+#                 -> EARDataset/stratified_<rung>_<planner>.csv, e.g. scene_only_er2, random_gpt54
 #   null_edit_er2 RQ2 null-edit control on the same 194 tasks: no VLM, 20 empty object sets per task, so the
 #                 editor re-renders the clean image with nothing added -- FINE TO RUN ON THE LOGIN NODE
 #   (attack_stage1.py has no --rang, so this stage is not sharded)
@@ -46,11 +47,12 @@ case "$TARGET" in
         if [ "$TARGET" = "random" ]; then PROMPT="random_list"; else PROMPT="scene_only"; fi
         DEFAULT_N=5
         DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
-    scene_only_er2|random_er2)
-        INPUT_CSV="EARDataset/stratified_baseline_er2.csv"   # the 194 tasks (its Judgement is the re-query; NOT the filter)
-        EVAL_CSV="EARDataset/dataset_baseline_er2.csv"       # first clean query: all 194 tasks are Judgement==0 here
-        OUT_CSV="EARDataset/stratified_${TARGET%_er2}_er2.csv"
-        if [ "$TARGET" = "random_er2" ]; then PROMPT="random_list"; else PROMPT="scene_only"; fi
+    scene_only_*|random_*)
+        PLANNER="${TARGET##*_}"                                      # the rung's suffix names the planner
+        INPUT_CSV="EARDataset/stratified_baseline_${PLANNER}.csv"   # the sampled tasks (its Judgement is the re-query; NOT the filter)
+        EVAL_CSV="EARDataset/dataset_baseline_${PLANNER}.csv"       # first clean query: every sampled task is Judgement==0 here
+        OUT_CSV="EARDataset/stratified_${TARGET}.csv"
+        if [ "${TARGET%_*}" = "random" ]; then PROMPT="random_list"; else PROMPT="scene_only"; fi
         DEFAULT_N=5
         DEFAULT_QOS="standby"; DEFAULT_TIME="4:00:00" ;;
     null_edit_er2)
@@ -117,7 +119,7 @@ echo "stage 1 ($TARGET, qos=$QOS mem=$MEM time=$TIME, model=$PROPOSER) -> job $j
 echo "When it finishes, check:"
 if [ "$PROMPT" = "scene_only" ]; then
     echo "  grep -A2 'First user prompt' stage1_${TARGET}_${jid}.out    # expect: Analyze the provided image."
-    echo "  grep 'Length of filtered input DataFrame' stage1_${TARGET}_${jid}.out    # expect 194 (scene_only_er2) / 200 (scene_only)"
+    echo "  grep 'Length of filtered input DataFrame' stage1_${TARGET}_${jid}.out    # expect the task count of $INPUT_CSV (ER-2: 194)"
     echo "Then render: bash scripts/submit_render.sh $TARGET"
 else
     echo "  grep -A2 'First user prompt' stage1_${TARGET}_${jid}.out    # expect: Analyze the provided image with the following task instruction: ..."

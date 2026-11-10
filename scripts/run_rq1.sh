@@ -20,7 +20,8 @@
 #     opus55    azure_anthropic/claude-opus-5-5       Azure Foundry /anthropic
 #     kimi26    azure_openai/Kimi-K2.6                Azure Foundry /openai/v1 (Moonshot AI's open-weight model)
 #     robobrain25  BAAI/RoboBrain2.5-8B-NV via vLLM   self-served like cosmosr2; the model has no thinking mode,
-#                                                     so it takes the plain constitution and Thinking stays empty
+#                                                     so it takes the plain constitution, is served without a
+#                                                     reasoning parser, and Thinking stays empty
 #   <csv> is one of:
 #     baseline   EARDataset/dataset_baseline_<TARGET>.csv                        (1,121 tasks, clean image)
 #     targeted   EARDataset/robot_constitution_64_automerge_<TARGET>_attack_20.csv (20 objects per refused task)
@@ -95,10 +96,13 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 # model the Hugging Face id vLLM loads. MODEL / SYSTEM_PROMPT_NAME already set in the environment win.
 TARGET="${TARGET:-er2}"
 VLLM_MODEL="${VLLM_MODEL:-}"
+# vLLM --reasoning-parser for a self-served model that emits thinking; empty serves without one.
+VLLM_REASONING_PARSER="${VLLM_REASONING_PARSER:-}"
 case "$TARGET" in
     er2)      _model="gemini/gemini-robotics-er-2-preview";  _prompt="robot_constitution_64_automerge" ;;
     cosmosr2) _model="hosted_vllm/nvidia/Cosmos-Reason2-8B"; _prompt="robot_constitution_64_automerge_cosmos_reason2"
-              VLLM_MODEL="${VLLM_MODEL:-nvidia/Cosmos-Reason2-8B}" ;;
+              VLLM_MODEL="${VLLM_MODEL:-nvidia/Cosmos-Reason2-8B}"
+              VLLM_REASONING_PARSER="${VLLM_REASONING_PARSER:-qwen3}" ;;
     gpt54)    _model="azure_openai/gpt-5.4-1";               _prompt="robot_constitution_64_automerge" ;;
     opus55)   _model="azure_anthropic/claude-opus-5-5";      _prompt="robot_constitution_64_automerge" ;;
     kimi26)   _model="azure_openai/Kimi-K2.6";               _prompt="robot_constitution_64_automerge" ;;
@@ -108,7 +112,7 @@ case "$TARGET" in
 esac
 MODEL="${MODEL:-$_model}"
 SYSTEM_PROMPT_NAME="${SYSTEM_PROMPT_NAME:-$_prompt}"
-export TARGET MODEL SYSTEM_PROMPT_NAME VLLM_MODEL
+export TARGET MODEL SYSTEM_PROMPT_NAME VLLM_MODEL VLLM_REASONING_PARSER
 # Log-name suffix: none for er2, so its logs keep the names the existing runs used.
 SUFFIX=""; [ "$TARGET" = "er2" ] || SUFFIX="_${TARGET}"
 

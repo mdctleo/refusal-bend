@@ -13,6 +13,7 @@
 #   bash scripts/submit_plans.sh random                         # 4 parallel slices over all rows
 #   bash scripts/submit_plans.sh random_er2                     # RQ2 rung on the 194 ER-2 stratified tasks
 #   bash scripts/submit_plans.sh scene_only_er2 4               # the other ER-2 rung
+#   MODEL=azure_openai/gpt-5.4-1 bash scripts/submit_plans.sh random_gpt54   # an RQ2 rung of another planner
 #   bash scripts/submit_plans.sh null_edit_er2                  # null-edit control: same editor, nothing added
 #   bash scripts/submit_plans.sh scene_only 8                   # 8 parallel slices
 #   bash scripts/submit_plans.sh random --rang 250,500          # one slice (e.g. an interrupted one)
@@ -44,11 +45,13 @@ case "$RUNG" in
     random|scene_only)
         CSV="EARDataset/stratified_${RUNG}.csv"
         IMAGE_ROOT="EARDataset/stratified_${RUNG}_images" ;;
-    random_er2|scene_only_er2|null_edit_er2)
-        # RQ2 rungs on the 194 ER-2 stratified tasks (submit_stage1.sh / submit_render.sh <rung>_er2).
+    random_*|scene_only_*|null_edit_er2)
+        # RQ2 rungs on a planner's stratified tasks (submit_stage1.sh / submit_render.sh <rung>_<planner>).
+        # The suffix names the CSV only; MODEL and SYSTEM_PROMPT_NAME select the planner that is queried
+        # (scripts/run_rq2.sh sets both from TARGET).
         # These CSVs still carry the clean re-query's Response/Thinking until this step overwrites them.
-        CSV="EARDataset/stratified_${RUNG%_er2}_er2.csv"
-        IMAGE_ROOT="EARDataset/stratified_${RUNG%_er2}_er2_images" ;;
+        CSV="EARDataset/stratified_${RUNG}.csv"
+        IMAGE_ROOT="EARDataset/stratified_${RUNG}_images" ;;
     targeted_er2|targeted)
         # RQ1 targeted proposer on the tasks TARGET refuses clean, 20 objects each (scripts/submit_stage1.sh targeted).
         # Images and "Attack Image Path" come from scripts/submit_render.sh targeted (src/attack_original.py).

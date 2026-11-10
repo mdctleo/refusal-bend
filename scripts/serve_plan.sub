@@ -10,6 +10,8 @@
 #
 # Environment (exported by run_rq1.sh, propagated by sbatch):
 #   VLLM_MODEL          Hugging Face id served by vLLM, e.g. nvidia/Cosmos-Reason2-8B
+#   VLLM_REASONING_PARSER  vLLM --reasoning-parser, e.g. qwen3 for Cosmos-Reason2 (its thinking goes to Thinking);
+#                       empty for a model with no thinking mode, so its whole output is the Response
 #   MODEL               LiteLLM model string the planner sends, e.g. hosted_vllm/nvidia/Cosmos-Reason2-8B
 #   TARGET              target name that selects the CSVs
 #   SYSTEM_PROMPT_NAME  constitution variant
@@ -37,9 +39,12 @@ VLLM_MODEL="${VLLM_MODEL:?VLLM_MODEL is not set}"
 PORT=$((20000 + SLURM_JOB_ID % 10000))
 VLLM_LOG="vllm_${SLURM_JOB_ID}.log"
 
-echo "serving $VLLM_MODEL on $host:$PORT (log: $VLLM_LOG)"
+PARSER_ARGS=()
+[ -n "${VLLM_REASONING_PARSER:-}" ] && PARSER_ARGS=(--reasoning-parser "$VLLM_REASONING_PARSER")
+
+echo "serving $VLLM_MODEL on $host:$PORT (reasoning parser: ${VLLM_REASONING_PARSER:-none}, log: $VLLM_LOG)"
 vllm serve "$VLLM_MODEL" \
-    --reasoning-parser qwen3 \
+    "${PARSER_ARGS[@]}" \
     --max-model-len 16384 \
     --gpu-memory-utilization 0.90 \
     --port "$PORT" > "$VLLM_LOG" 2>&1 &
