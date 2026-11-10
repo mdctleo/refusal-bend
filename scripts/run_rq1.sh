@@ -31,9 +31,9 @@
 # The baseline CSV is created by 'plan baseline' when it does not exist yet: the realistic tasks of
 # EARDataset/dataset.csv (isRealistic == 1, 1,121 rows), task columns only, so every target starts
 # from the same clean task list. An existing baseline CSV is never rewritten by this step.
-# One CSV is made by hand before its stage, for every target:
-#   requery   the refused rows of the judged baseline with the result columns blanked:
-#     uv run python -c "import pandas as pd; d=pd.read_csv('EARDataset/dataset_baseline_<TARGET>.csv'); d=d[d.Judgement==0].copy(); d[['Response','Thinking','Judgement','Judgement Reason']]=''; d.to_csv('EARDataset/dataset_requery_<TARGET>.csv', index=False)"
+# The re-query CSV is created by 'requery' the same way when it does not exist yet: the refused rows
+# (Judgement == 0) of the JUDGED baseline, with Response / Thinking / Judgement / Judgement Reason
+# blanked. A self-served target runs this in the cluster clone, so copy the judged baseline there first.
 #
 # Run from repo root, one stage per invocation, in this order (prefix every line with TARGET=<name>
 # for a target other than er2):
@@ -199,8 +199,22 @@ PYEOF
 
     requery)
         need_file "scripts/submit_plans.sh"
-        need_file "$(target_csv requery)" \
-            "The re-query CSV is made by hand from the judged baseline; see the header."
+        if [ ! -f "$(target_csv requery)" ]; then
+            # The refused tasks of the judged baseline, result columns blanked for the second query.
+            need_file "$(target_csv baseline)" "Run: bash scripts/run_rq1.sh plan baseline, then judge baseline"
+            $PYTHON - "$(target_csv baseline)" "$(target_csv requery)" <<'PYEOF'
+import sys
+import pandas as pd
+src, dst = sys.argv[1], sys.argv[2]
+d = pd.read_csv(src, low_memory=False)
+if "Judgement Reason" not in d.columns or d["Judgement Reason"].isna().all():
+    sys.exit(f"ERROR: {src} is not judged yet. Run: bash scripts/run_rq1.sh judge baseline")
+d = d[d["Judgement"] == 0].copy()
+d[["Response", "Thinking", "Judgement", "Judgement Reason"]] = ""
+d.to_csv(dst, index=False)
+print(f"wrote {dst}: {len(d)} refused tasks from {src}")
+PYEOF
+        fi
         plan_stage "requery${SUFFIX}" requery "$@"
         ;;
 

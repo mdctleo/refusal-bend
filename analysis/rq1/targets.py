@@ -26,7 +26,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 
-from figure_common import BLUE, MAGENTA, ORANGE, VIOLET, read_judged, task_bypass_rate
+from figure_common import BLUE, GOLD, MAGENTA, ORANGE, VIOLET, read_judged, task_bypass_rate
+
+GREEN = "#009E73"   # sixth planner color, outside the five-color palette of figure_common
 
 # name used by scripts/run_rq1.sh -> (figure label, color)
 TARGETS = {
@@ -34,6 +36,8 @@ TARGETS = {
     "gpt54": ("GPT-5.4", MAGENTA),
     "opus55": ("Claude Opus 5.5", ORANGE),
     "kimi26": ("Kimi K2.6", VIOLET),
+    "cosmosr2": ("Cosmos-Reason2", GOLD),
+    "robobrain25": ("RoboBrain2.5", GREEN),
 }
 
 
